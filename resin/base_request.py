@@ -193,4 +193,4 @@ class Util(object):
 
     def get_api_key(self):
         # return None if key is not present
-        return os.environ.get('RESIN_API_KEY')
+        return os.environ.get('APPLICATION_API_KEY')
