@@ -66,15 +66,14 @@ class Build(object):
             'build', 'GET', params=params,
             endpoint=self.settings.get('pine_endpoint')
         )
-        if full_builds:
-            builds = []
-            for i in full_builds['d']:
-                builds.append({
-                    k: i[k] for k in (
-                        'id', 'created_at', 'status',
-                        'push_timestamp', 'end_timestamp',
-                        'start_timestamp', 'project_type',
-                        'commit_hash', 'message', 'log'
-                    )
-                })
-            return builds
+        builds = []
+        for i in full_builds['d']:
+            builds.append({
+                k: i[k] for k in (
+                    'id', 'created_at', 'status',
+                    'push_timestamp', 'end_timestamp',
+                    'start_timestamp', 'project_type',
+                    'commit_hash', 'message', 'log'
+                )
+            })
+        return builds

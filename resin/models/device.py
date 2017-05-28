@@ -211,7 +211,7 @@ class Device(object):
             self.base_request.request(
                 'device', 'GET', params=params,
                 endpoint=self.settings.get('pine_endpoint')
-            )
+            )['d']
         ) > 0
 
     def is_online(self, uuid):
