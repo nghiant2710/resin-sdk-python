@@ -1,3 +1,4 @@
+from builtins import object
 import sys
 import binascii
 import os

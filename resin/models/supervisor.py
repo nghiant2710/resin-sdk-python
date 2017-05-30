@@ -1,3 +1,4 @@
+from builtins import object
 import os
 from pkg_resources import parse_version
 

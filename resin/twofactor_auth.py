@@ -1,4 +1,7 @@
-import urlparse
+from future import standard_library
+standard_library.install_aliases()
+from builtins import object
+import urllib.parse
 
 import pyotp
 
@@ -123,5 +126,5 @@ class TwoFactorAuth(object):
             'auth/totp/setup', 'GET',
             endpoint=self.settings.get('api_endpoint'), login=True
         )
-        tmp = urlparse.parse_qs(otp_auth_url)
+        tmp = urllib.parse.parse_qs(otp_auth_url)
         return tmp['secret'][0]

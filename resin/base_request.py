@@ -1,10 +1,13 @@
+from future import standard_library
+standard_library.install_aliases()
+from builtins import object
 import requests
 import json
-import urllib
+import urllib.request, urllib.parse, urllib.error
 from string import Template
 import os
 
-from urlparse import urljoin
+from urllib.parse import urljoin
 
 from .settings import Settings
 from .token import Token

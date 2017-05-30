@@ -1,3 +1,5 @@
+from builtins import map
+from builtins import object
 import sys
 
 from ..base_request import BaseRequest
@@ -53,7 +55,7 @@ class Config(object):
         if self._config is None:
             self._config = self.base_request.request(
                 'config', 'GET', endpoint=self.settings.get('api_endpoint'))
-            self._config['deviceTypes'] = map(_normalize_device_type, self._config['deviceTypes'])
+            self._config['deviceTypes'] = list(map(_normalize_device_type, self._config['deviceTypes']))
         return self._config
 
     def get_device_types(self):

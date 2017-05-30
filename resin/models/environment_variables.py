@@ -1,3 +1,5 @@
+from builtins import map
+from builtins import object
 import re
 import json
 
@@ -166,7 +168,7 @@ class DeviceEnvVariable(object):
         env_list = self.base_request.request(
             'device_environment_variable', 'GET', params=params,
             endpoint=self.settings.get('pine_endpoint'))
-        return map(self._fix_device_env_var_name_key, env_list['d'])
+        return list(map(self._fix_device_env_var_name_key, env_list['d']))
 
 
 class ApplicationEnvVariable(object):

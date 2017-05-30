@@ -3,6 +3,7 @@ This module implements all models for Resin Python SDK.
 
 """
 
+from builtins import object
 from .device import Device
 from .application import Application
 from .config import Config

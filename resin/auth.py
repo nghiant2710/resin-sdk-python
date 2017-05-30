@@ -1,3 +1,4 @@
+from builtins import object
 from .base_request import BaseRequest
 from .token import Token
 from .settings import Settings
