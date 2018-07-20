@@ -1,121 +1,100 @@
-from pubnub import Pubnub
 from functools import wraps
+import json
+import threading
 
 from .base_request import BaseRequest
+from . import exceptions
 from .models.config import Config
 from .models.device import Device
+from .settings import Settings
 
 
-# TODO: https://github.com/resin-io/resin-sdk/pull/277/files
+class Subscription(threading.Thread):
+    """
+    This is low level class and is not meant to be used by end users directly.
+    """
+
+    def __init__(self, response, callback):
+        self.response = response
+        self.callback = callback
+        super(Subscription, self).__init__()
+
+    def run(self):
+        if (self.response.status_code == 200):
+            try:
+                for line in self.response.iter_lines():
+                    if line:
+                        self.callback(json.loads(line))
+            except AttributeError:
+                # expected AttributeError when response.closed() called
+                pass
+        else:
+            raise exceptions.RequestError(response.content)
+
+    def stop(self):
+        # Releases the connection back to the pool and response.raw cannot be accessed again so AttributeError will be raised if trying to read from raw.
+        self.response.close()
+
 class Logs(object):
     """
     This class implements functions that allow processing logs from device.
 
-    This class is implemented using pubnub python sdk.
-
-    For more details about pubnub, please visit: https://www.pubnub.com/docs/python/pubnub-python-sdk
-
     """
 
+    subscriptions = {}
+
     def __init__(self):
+        self.base_request = BaseRequest()
         self.config = Config()
         self.device = Device()
+        self.settings = Settings()
 
-    def _init_pubnub(func):
-        @wraps(func)
-        def wrapper(self, *args, **kwargs):
-            if not hasattr(self, 'pubnub'):
-                pubnub_key = self.config.get_all()['pubnub']
-                self.pubnub = Pubnub(
-                    publish_key=pubnub_key['publish_key'],
-                    subscribe_key=pubnub_key['subscribe_key']
-                )
-            return func(self, *args, **kwargs)
-        return wrapper
-
-    @_init_pubnub
-    def subscribe(self, uuid, callback, error):
+    def subscribe(self, uuid, callback):
         """
         This function allows subscribing to device logs.
-        There are fields (`m`, `t`, `s`, `c`) in the output which can be unclear. They stand for:
-            m - The log message itself.
-            t - The log timestamp.
-            s - Is this a system message?
-            c - The id of the service which produced this log (or null if the device does not support multiple containers).
 
         Args:
             uuid (str): device uuid.
             callback (function): this callback is called on receiving a message from the channel.
-            error (function): this callback is called on an error event.
-            For more details about callbacks in pubnub subscribe, visit here: https://www.pubnub.com/docs/python/api-reference#subscribe
-
-        Examples:
-            # Define callback and error.
-            >>> def callback(message, channel):
-            ...     print(message)
-            >>> def error(message):
-            ...     print('Error:'+ str(message))
-            >>> Logs.subscribe(uuid=uuid, callback=callback, error=error)
 
         """
 
-        channel = self.get_channel(uuid)
-        self.pubnub.subscribe(channels=channel, callback=callback, error=error)
+        raw_query = 'stream=1'
 
-    @_init_pubnub
-    def history(self, uuid, callback, error):
+        resp = self.base_request.request(
+            '/device/v2/{uuid}/logs'.format(uuid=uuid), 'GET', raw_query=raw_query, stream=True,
+            endpoint=self.settings.get('api_endpoint')
+        )
+
+        if uuid not in self.subscriptions:
+            self.subscriptions[uuid] = Subscription(resp, callback)
+            self.subscriptions[uuid].start()
+
+    def history(self, uuid, count=None):
         """
-        This function allows fetching historical device logs.
-
+        Get device logs history.
         Args:
             uuid (str): device uuid.
-            callback (function): this callback is called on receiving a message from the channel.
-            error (function): this callback is called on an error event.
-            For more details about callbacks in pubnub subscribe, visit here: https://www.pubnub.com/docs/python/api-reference#history
-
-        Examples:
-            # Define callback and error.
-            >>> def callback(message):
-            ...     print(message)
-            >>> def error(message):
-            ...     print('Error:'+ str(message))
-            Logs.history(uuid=uuid, callback=callback, error=error)
+            count (int): this callback is called on receiving a message from the channel.
 
         """
 
-        channel = self.get_channel(uuid)
-        self.pubnub.history(channel=channel, callback=callback, error=error)
+        raw_query = ''
 
-    def unsubscribe(self, uuid):
-        """
-        This function allows unsubscribing to device logs.
+        if count:
+            raw_query = 'count={}'.format(count)
 
-        Args:
-            uuid (str): device uuid.
+        return self.base_request.request(
+            '/device/v2/{uuid}/logs'.format(uuid=uuid), 'GET', raw_query=raw_query,
+            endpoint=self.settings.get('api_endpoint')
+        )
 
-        """
+    def unsubscribe(self, uuid=None):
+        if uuid and uuid in self.subscriptions:
+            self.subscriptions.pop(uuid, None).stop()
+        else:
+            # unsubscribe all if no uuid specified
+            for item in self.subscriptions:
+                self.subscriptions[item].stop()
+            self.subscriptions = {}
 
-        if hasattr(self, 'pubnub'):
-            channel = self.get_channel(uuid)
-            self.pubnub.unsubscribe(channel=channel)
-
-    def get_channel(self, uuid):
-        """
-        This function returns pubnub channel for a specific device.
-
-        Args:
-            uuid (str): device uuid.
-
-        Returns:
-            str: device channel.
-
-        """
-
-        if not hasattr(self, 'logs_channel'):
-            device_info = self.device.get(uuid)
-            if 'logs_channel' in device_info:
-                self.logs_channel = device_info['logs_channel']
-            else:
-                self.logs_channel = uuid
-
-        return 'device-{logs_channel}-logs'.format(logs_channel=self.logs_channel)
