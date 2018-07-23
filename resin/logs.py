@@ -1,6 +1,7 @@
 from functools import wraps
 import json
 import threading
+import requests
 
 from .base_request import BaseRequest
 from . import exceptions
@@ -15,25 +16,37 @@ class Subscription(threading.Thread):
     """
 
     def __init__(self, response, callback):
+        self._stop_event = threading.Event()
         self.response = response
         self.callback = callback
         super(Subscription, self).__init__()
 
     def run(self):
         if (self.response.status_code == 200):
-            try:
-                for line in self.response.iter_lines():
-                    if line:
-                        self.callback(json.loads(line))
-            except AttributeError:
-                # expected AttributeError when response.closed() called
-                pass
+            while True:
+                try:
+                    if not self.stopped():
+                        line = self.response.iter_lines()
+                        if line:
+                            self.callback(json.loads(line))
+                    else:
+                        response.close()
+                        break
+                except StopIteration:
+                    break
+                except requests.exceptions.ChunkedEncodingError:
+                    if self.stopped():
+                        pass
+                    raise
         else:
             raise exceptions.RequestError(response.content)
 
     def stop(self):
         # Releases the connection back to the pool and response.raw cannot be accessed again so AttributeError will be raised if trying to read from raw.
-        self.response.close()
+        self._stop_event.set()
+
+    def stopped(self):
+        return self._stop_event.is_set()
 
 class Logs(object):
     """
